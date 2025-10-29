@@ -1,0 +1,10 @@
+[package]
+name = "voicesynth"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cpal = "*"
+random = "0.14.1"
+sdl2 = { version="*", features=["ttf"] }
+lewton = { version="0.10.2", features=["ogg"] }
