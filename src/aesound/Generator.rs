@@ -5,10 +5,11 @@ use random::Source;
 #[derive(Clone, Copy)]
 pub enum WaveType
 {
-	Sine(f32),
+	Sine,
 	Saw,
 	Square(f32),
-	Noise
+	SineOverdrive(f32),
+	Triangle
 }
 
 impl ToString for WaveType
@@ -17,10 +18,11 @@ impl ToString for WaveType
 	{
 		match *self
 		{
-			Self::Sine(phase) => format!("Sine ({phase}deg)"),
+			Self::Sine => format!("Sine"),
 			Self::Saw => format!("Sawtooth"),
 			Self::Square(pwm) => format!("Square ({}%)", (pwm * 100.0).round()),
-			Self::Noise => format!("Noise")
+			Self::SineOverdrive(factor) => format!("SineOD ({}%)", (factor * 1000.0).round()),
+			Self::Triangle => format!("Triangle")
 		}
 	}
 }
@@ -52,7 +54,6 @@ pub struct Generator
 	env: Envelope,
 	volume: f32,
 	filter: Filter,
-	rand: random::Xorshift128Plus,
 }
 
 impl Generator
@@ -66,7 +67,6 @@ impl Generator
 		{
 			wave, freq, tick: 0, channel: false,
 			env, volume, filter,
-			rand: random::default(freq as u64)
 		}
 	}
 
@@ -75,13 +75,18 @@ impl Generator
 		let t = self.tick as f32 / sampleRate as f32;
 		let wave = match self.wave
 		{
-			WaveType::Sine(phase) =>
-			{
-				(2.0 * PI * t * self.freq + phase / (360.0 * self.freq)).sin()
-			}
+			WaveType::Sine => (2.0 * PI * t * self.freq).sin(),
 			WaveType::Saw => 2.0 * (t * self.freq - (0.5 + t * self.freq).floor()),
 			WaveType::Square(pwm) => if (t * self.freq).fract() > pwm { 1.0 } else { 0.0 },
-			WaveType::Noise => self.rand.read::<i16>() as f32 / i16::MAX as f32
+			WaveType::SineOverdrive(factor) =>
+			{
+				// Clamped sine
+				(factor * 10.0 * (2.0 * PI * t * self.freq).sin()).clamp(-1.0, 1.0)
+			}
+			WaveType::Triangle =>
+			{
+				4.0 * (t * self.freq - (t * self.freq + 0.75).floor() + 0.25).abs() - 1.0
+			}
 		};
 
 		let wave = match self.filter

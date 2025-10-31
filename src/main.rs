@@ -28,18 +28,17 @@ static mut SOUNDS: LazyLock<Vec<SoundSource>> = LazyLock::new(|| vec![]);
 
 fn add(octave: i32, note: i32, waveform: WaveType, harmonics: u32, env: Envelope)
 {
-	let freq = NOTES[note as usize] * 2.0_f32.powi(octave);
-
-	println!("{freq}");
+	let freq = NOTES[note as usize];
+	let f0 = 2.0_f32.powi(octave);
 	
 	for i in 1..=harmonics
 	{
 		unsafe
 		{
 			(*SOUNDS).push(SoundSource::ProcGen(Generator::new(
-				waveform, freq * i as f32,
+				waveform, freq * f0 * i as f32,
 				env,
-				1.0, Filter::None
+				1.0 / i as f32, Filter::None
 			)));
 		}
 	}
@@ -102,17 +101,17 @@ fn main()
 	let mut lpf = 1000.0;
 	let mut harmonics = 1;
 	let mut attack = 0.0;
-	let mut decay = 2.0;
+	let mut decay = 1.0;
 	let mut pwm = 0.5;
-	let mut wave = WaveType::Square(pwm);
-	
-	unsafe
-	{
-		if let Some(x) = AudioFile::new(String::from("./test.ogg"))
-		{
-			(*SOUNDS).push(SoundSource::AudioFile(x));
-		}
-	}
+	let mut wave = WaveType::Triangle;
+
+	// unsafe
+	// {
+	// 	if let Some(x) = AudioFile::new(String::from("./test.ogg"))
+	// 	{
+	// 		(*SOUNDS).push(SoundSource::AudioFile(x));
+	// 	}
+	// }
 
 	'running: loop
 	{
@@ -141,10 +140,11 @@ fn main()
 						if k == Keycode::T { note = Some(7 + semitone); } // G
 						if k == Keycode::Y { note = Some(9 + semitone); } // A
 						if k == Keycode::U { note = Some(11 + semitone.min(0)); } // B
-						if k == Keycode::Z { wave = WaveType::Sine(0.0); }
+						if k == Keycode::Z { wave = WaveType::Sine; }
 						if k == Keycode::X { wave = WaveType::Saw; }
 						if k == Keycode::C { wave = WaveType::Square(pwm); }
-						if k == Keycode::V { wave = WaveType::Noise; }
+						if k == Keycode::V { wave = WaveType::SineOverdrive(pwm); }
+						if k == Keycode::B { wave = WaveType::Triangle; }
 						if k == Keycode::Up { lpf += 50.0; }
 						if k == Keycode::Down { lpf -= 50.0; }
 						if k == Keycode::Left { harmonics = (harmonics - 1).max(1); }
@@ -163,7 +163,11 @@ fn main()
 						{
 							if keymod.intersects(Mod::LSHIFTMOD) { pwm -= 0.05; }
 							else { pwm += 0.05; }
-							wave = WaveType::Square(pwm);
+							wave = match wave
+							{
+								WaveType::SineOverdrive(_) => WaveType::SineOverdrive(pwm),
+								_ => WaveType::Square(pwm)
+							}
 						}
 						if let Some(n) = note
 						{
